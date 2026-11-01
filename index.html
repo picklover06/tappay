@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TapPay</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TapPay">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0A1822">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600&family=Onest:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Один тёмный вид (статус-бар iPhone в режиме приложения белый). Палитра: самаркандская бирюза на глубоком лазурите. */
+:root {
+  --bg: #0A1822; --surface: #11242F; --surface2: #17303D; --ink: #E6F1F2; --muted: #8CA3AF; --line: #1E3846;
+  --accent: #3CC4C8; --accent-ink: #06222A; --bad: #F07575; --ok: #4CC38A;
+  --font-display: "Unbounded", "Onest", system-ui, sans-serif;
+  --font-body: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; -webkit-text-size-adjust: 100%; overscroll-behavior: none; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.screen {
+  position: fixed; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; display: none; background: var(--bg);
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) max(16px, env(safe-area-inset-left, 0px)) calc(env(safe-area-inset-bottom, 0px) + 28px) max(16px, env(safe-area-inset-right, 0px));
+}
+.screen.on { display: block; }
+.wrap { max-width: 460px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+h1 { font-family: var(--font-display); font-weight: 600; font-size: 22px; letter-spacing: -.01em; margin: 0; }
+.sub { color: var(--muted); margin: 0; text-align: center; max-width: 34ch; }
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.bar b { font-family: var(--font-display); font-weight: 500; font-size: 15px; }
+.ghost { background: none; border: 0; color: var(--accent); padding: 8px 4px; font-weight: 500; }
+.ghost.muted { color: var(--muted); }
+.primary { border: 0; border-radius: 14px; background: var(--accent); color: var(--accent-ink); font-weight: 600; padding: 14px; width: 100%; }
+.primary.sm { width: auto; padding: 9px 16px; border-radius: 12px; }
+.secondary { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 13px; font-weight: 500; width: 100%; }
+.danger { color: var(--bad); }
+.err { color: var(--bad); min-height: 1.4em; margin: 0; text-align: center; font-size: 14px; }
+
+/* PIN */
+.pinwrap { align-items: center; padding-top: 6vh; }
+.mark { width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg, #1A3A8F, #0B8A92); display: grid; place-items: center; color: #fff; }
+.pdots { display: flex; gap: 14px; margin: 6px 0; }
+.pdots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--muted); transition: background .12s, border-color .12s; }
+.pdots i.f { background: var(--accent); border-color: var(--accent); }
+.pdots.shake { animation: shake .35s; }
+@keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+.pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; max-width: 300px; margin-top: 8px; }
+.pad button { height: 62px; border-radius: 18px; border: 0; background: var(--surface); font-family: var(--font-display); font-weight: 500; font-size: 22px; }
+.pad button:active { background: var(--surface2); }
+.pad button.empty { visibility: hidden; }
+.pad button.del { font-size: 18px; color: var(--muted); background: none; }
+
+/* Карточки */
+.card {
+  position: relative; width: 100%; aspect-ratio: 1.586; border-radius: 20px; padding: 16px 18px; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between;
+  box-shadow: 0 -6px 18px -8px rgba(0,0,0,.55), 0 10px 24px -12px rgba(0,0,0,.6); background-size: cover; background-position: center; min-width: 0; border: 0; text-align: left;
+}
+.card[data-text="light"] { color: #fff; }
+.card[data-text="dark"] { color: #0E2433; }
+.card .pat { position: absolute; inset: 0; pointer-events: none; }
+.card[data-text="dark"] .pat { filter: invert(1); }
+.card[data-pattern="rings"] .pat { background: radial-gradient(circle at 92% -8%, transparent 0 70px, rgba(255,255,255,.10) 70px 100px, transparent 100px), radial-gradient(circle at 8% 118%, transparent 0 60px, rgba(255,255,255,.08) 60px 84px, transparent 84px); }
+.card[data-pattern="grid"] .pat { background: repeating-linear-gradient(0deg, rgba(255,255,255,.07) 0 1px, transparent 1px 22px), repeating-linear-gradient(90deg, rgba(255,255,255,.07) 0 1px, transparent 1px 22px); }
+.card[data-pattern="dots"] .pat { background: radial-gradient(rgba(255,255,255,.16) 1.5px, transparent 1.7px) 0 0 / 14px 14px; }
+.card[data-pattern="waves"] .pat { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='24'%3E%3Cpath d='M0 12 Q15 0 30 12 T60 12' fill='none' stroke='white' stroke-opacity='.13' stroke-width='2'/%3E%3C/svg%3E"); }
+.card .r { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
+.card .nick { font-weight: 600; font-size: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .nick i { font-style: normal; font-family: var(--font-mono); font-weight: 400; font-size: 13px; opacity: .8; margin-left: 6px; }
+.card .bank, .card .net { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .9; white-space: nowrap; }
+.card .chip { width: 38px; height: 28px; border-radius: 6px; background: linear-gradient(135deg, #F3D98B, #C9A24A); position: relative; z-index: 1; }
+.card .num { position: relative; z-index: 1; font-family: var(--font-mono); font-weight: 500; font-size: clamp(15px, 4.8vw, 20px); letter-spacing: .08em; overflow-wrap: anywhere; }
+.card .holder { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .exp { font-family: var(--font-mono); font-size: 12px; }
+.stack { display: flex; flex-direction: column; padding-top: 4px; }
+.stack .card + .card { margin-top: -41%; }
+.stack .card:active { transform: scale(.995); }
+.empty-state { text-align: center; color: var(--muted); padding: 36px 8px; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+.empty-state p { margin: 0; max-width: 32ch; }
+
+/* Детали */
+.rows { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 14px; border-bottom: 1px solid var(--line); min-width: 0; }
+.row:last-child { border-bottom: 0; }
+.row .k { font-size: 12px; color: var(--muted); display: block; }
+.row .v { font-family: var(--font-mono); font-size: 15px; overflow-wrap: anywhere; }
+.row .cp { border: 0; background: var(--surface2); border-radius: 10px; padding: 8px 12px; font-weight: 500; color: var(--accent); white-space: nowrap; }
+.btns { display: flex; flex-direction: column; gap: 10px; }
+
+/* Редактор */
+.prev { position: sticky; top: calc(env(safe-area-inset-top, 0px) * -1); z-index: 5; padding: 6px 0 10px; background: linear-gradient(var(--bg) 82%, transparent); }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label, .field .lab { font-size: 13px; color: var(--muted); }
+.field input[type="text"], .field input[inputmode] { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-size: 16px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sect { font-family: var(--font-display); font-weight: 500; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 6px 0 -4px; }
+.presets { display: flex; gap: 10px; flex-wrap: wrap; }
+.presets button { width: 48px; height: 34px; border-radius: 10px; border: 2px solid transparent; padding: 0; }
+.presets button[aria-pressed="true"] { border-color: var(--ink); }
+.colors { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.colors input[type="color"] { width: 100%; height: 44px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 4px; }
+.field input[type="range"] { width: 100%; accent-color: var(--accent); }
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg button { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 12px; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.hint { font-size: 12px; color: var(--muted); margin: 0; }
+.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); transform: translate(-50%, 20px); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 50; max-width: 90vw; text-align: center; }
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .pdots.shake { animation: none; } .toast { transition: none; } }
+</style>
+</head>
+<body>
+
+<section class="screen" id="vPin" aria-label="PIN-код">
+  <div class="wrap pinwrap">
+    <div class="mark" aria-hidden="true">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8.5 8.5a5 5 0 0 1 0 7"/><path d="M12 5.5a9 9 0 0 1 0 13"/><path d="M15.5 2.5a13 13 0 0 1 0 19"/></svg>
+    </div>
+    <h1 id="pinTitle"></h1>
+    <p class="sub" id="pinSub"></p>
+    <div class="pdots" id="pinDots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <p class="err" id="pinErr" role="alert"></p>
+    <div class="pad" id="pad">
+      <button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button>
+      <button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button>
+      <button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button>
+      <button type="button" class="empty" tabindex="-1" aria-hidden="true"></button><button type="button" data-k="0">0</button><button type="button" class="del" data-k="del" aria-label="Стереть">⌫</button>
+    </div>
+  </div>
+</section>
+
+<section class="screen" id="vHome" aria-label="Мои карты">
+  <div class="wrap">
+    <div class="bar"><h1>Мои карты</h1><button class="primary sm" id="btnAdd" type="button">+ Карта</button></div>
+    <div id="stack"></div>
+    <div class="btns">
+      <button class="secondary" id="btnLock" type="button">Заблокировать</button>
+      <button class="ghost muted" id="btnErase" type="button">Стереть все данные</button>
+    </div>
+    <p class="hint" style="text-align:center">Данные зашифрованы PIN-кодом и лежат только на этом iPhone. CVV не сохраняется.</p>
+  </div>
+</section>
+
+<section class="screen" id="vDetail" aria-label="Карта">
+  <div class="wrap">
+    <div class="bar"><button class="ghost" id="dBack" type="button">‹ Назад</button><button class="ghost" id="dEdit" type="button">Изменить</button></div>
+    <div id="dCard"></div>
+    <div class="rows" id="dRows"></div>
+    <div class="btns">
+      <button class="secondary" id="dReveal" type="button">Показать номер</button>
+      <button class="ghost danger" id="dDelete" type="button">Удалить карту</button>
+    </div>
+  </div>
+</section>
+
+<section class="screen" id="vEdit" aria-label="Редактор карты">
+  <div class="wrap">
+    <div class="bar"><button class="ghost muted" id="eCancel" type="button">Отмена</button><b id="eTitle"></b><button class="primary sm" id="eSave" type="button">Готово</button></div>
+    <div class="prev" id="ePrev"></div>
+    <p class="err" id="eErr" role="alert"></p>
+    <form id="eForm" class="wrap" style="gap:16px" autocomplete="off">
+      <div class="sect">Данные</div>
+      <div class="field"><label for="fNick">Название</label><input type="text" id="fNick" maxlength="22" placeholder="Основная" autocomplete="off"></div>
+      <div class="field"><label for="fNum">Номер карты</label><input type="text" id="fNum" inputmode="numeric" maxlength="23" placeholder="0000 0000 0000 0000" autocomplete="off"></div>
+      <div class="two">
+        <div class="field"><label for="fExp">Срок</label><input type="text" id="fExp" inputmode="numeric" maxlength="5" placeholder="ММ/ГГ" autocomplete="off"></div>
+        <div class="field"><label for="fBank">Банк</label><input type="text" id="fBank" maxlength="14" placeholder="Мой банк" autocomplete="off"></div>
+      </div>
+      <div class="field"><label for="fHolder">Имя на карте</label><input type="text" id="fHolder" maxlength="26" placeholder="IVAN PETROV" autocomplete="off" autocapitalize="characters"></div>
+      <p class="hint">CVV не сохраняется. Вводи его вручную при каждой оплате.</p>
+
+      <div class="sect">Дизайн</div>
+      <div class="field"><span class="lab">Готовые стили</span><div class="presets" id="fPresets"></div></div>
+      <div class="colors">
+        <div class="field"><label for="fA">Цвет 1</label><input type="color" id="fA"></div>
+        <div class="field"><label for="fB">Цвет 2</label><input type="color" id="fB"></div>
+      </div>
+      <div class="field"><label for="fAng">Угол градиента</label><input type="range" id="fAng" min="0" max="360" step="5"></div>
+      <div class="field"><span class="lab">Цвет текста</span><div class="seg" id="fText"><button type="button" data-v="light">Светлый</button><button type="button" data-v="dark">Тёмный</button></div></div>
+      <div class="field"><span class="lab">Узор</span><div class="seg" id="fPat"><button type="button" data-v="none">Нет</button><button type="button" data-v="rings">Круги</button><button type="button" data-v="grid">Сетка</button><button type="button" data-v="dots">Точки</button><button type="button" data-v="waves">Волны</button></div></div>
+      <div class="field"><span class="lab">Своя картинка на фон</span>
+        <div class="seg"><button type="button" id="fImgBtn">Выбрать фото</button><button type="button" id="fImgDel">Убрать</button></div>
+        <input type="file" id="fImg" accept="image/*" hidden>
+      </div>
+    </form>
+  </div>
+</section>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+  "use strict";
+  var KEY = "tappay-vault-v1", FAILS = "tappay-fails-v1", UNTIL = "tappay-until-v1";
+  var enc = new TextEncoder(), dec = new TextDecoder();
+  var vault = null, key = null, salt = null;
+  var mode = "unlock", pin = "", tmpPin = "", busy = false;
+  var currentId = null, reveal = false, draft = null, isNew = false;
+  var hiddenAt = 0, idleTimer = null, toastTimer = null, eraseTimer = null, eraseArmed = false;
+
+  var $ = function (id) { return document.getElementById(id); };
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+
+  /* ---------- crypto ---------- */
+  function b64(buf) { var b = new Uint8Array(buf), s = ""; for (var i = 0; i < b.length; i += 8192) s += String.fromCharCode.apply(null, b.subarray(i, i + 8192)); return btoa(s); }
+  function unb64(s) { var bin = atob(s), b = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i); return b; }
+  async function derive(p, sl) {
+    var base = await crypto.subtle.importKey("raw", enc.encode(p), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey({ name: "PBKDF2", salt: sl, iterations: 310000, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  }
+  async function persist() {
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    var ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, enc.encode(JSON.stringify(vault)));
+    var ok = lsSet(KEY, JSON.stringify({ v: 1, salt: b64(salt), iv: b64(iv), data: b64(ct) }));
+    if (!ok) toast("Не удалось сохранить: нет места. Убери фон-картинку.");
+    return ok;
+  }
+
+  /* ---------- helpers ---------- */
+  function luhn(n) { var s = 0, alt = false; for (var i = n.length - 1; i >= 0; i--) { var d = +n[i]; if (alt) { d *= 2; if (d > 9) d -= 9; } s += d; alt = !alt; } return n.length > 0 && s % 10 === 0; }
+  function netOf(n) {
+    if (/^9860/.test(n)) return "Humo";
+    if (/^8600/.test(n)) return "Uzcard";
+    if (/^4/.test(n)) return "Visa";
+    if (/^(5[1-5]|2[2-7])/.test(n)) return "Mastercard";
+    if (/^62/.test(n)) return "UnionPay";
+    return "";
+  }
+  function groups(n) { return (n.match(/.{1,4}/g) || []).join(" "); }
+  function newId() { var a = crypto.getRandomValues(new Uint32Array(2)); return "c" + a[0].toString(36) + a[1].toString(36); }
+  function find(id) { for (var i = 0; i < vault.cards.length; i++) if (vault.cards[i].id === id) return vault.cards[i]; return null; }
+  function toast(msg) {
+    var t = $("toast"); t.textContent = msg; t.classList.add("on");
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove("on"); }, 2600);
+  }
+  function show(id) {
+    ["vPin", "vHome", "vDetail", "vEdit"].forEach(function (v) { $(v).classList.toggle("on", v === id); });
+    $(id).scrollTop = 0;
+  }
+  async function copy(text, label) {
+    var ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {
+      try { var ta = document.createElement("textarea"); ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, 99999); ok = document.execCommand("copy"); document.body.removeChild(ta); } catch (e2) {}
+    }
+    if (ok) {
+      toast(label + " скопирован. Буфер очистится через 30 с");
+      setTimeout(function () { try { navigator.clipboard.writeText(" "); } catch (e) {} }, 30000);
+    } else toast("Не получилось скопировать");
+  }
+
+  /* ---------- card rendering ---------- */
+  var PRESETS = [
+    { n: "Лазурит", a: "#1A3A8F", b: "#0B8A92", t: "light" },
+    { n: "Шафран", a: "#C9791B", b: "#E8B53A", t: "light" },
+    { n: "Графит", a: "#12232F", b: "#2C4A5B", t: "light" },
+    { n: "Изумруд", a: "#0F5132", b: "#2FA66A", t: "light" },
+    { n: "Слива", a: "#4A1F5C", b: "#B14A8F", t: "light" },
+    { n: "Песок", a: "#EADFC9", b: "#C9B48A", t: "dark" }
+  ];
+  function defaultDesign() { return { a: PRESETS[0].a, b: PRESETS[0].b, angle: 135, text: "light", pattern: "rings", img: "" }; }
+  function bgOf(d) {
+    if (d.img) return 'linear-gradient(rgba(0,0,0,.28),rgba(0,0,0,.38)), url("' + d.img + '")';
+    return "linear-gradient(" + (d.angle | 0) + "deg," + esc(d.a) + "," + esc(d.b) + ")";
+  }
+  function cardHTML(c, opts) {
+    opts = opts || {};
+    var d = c.design || defaultDesign(), n = c.number || "";
+    var last = n.slice(-4);
+    var shown;
+    if (opts.reveal && n) shown = groups(n);
+    else if (n) shown = "•••• •••• •••• " + last;
+    else shown = "•••• •••• •••• ••••";
+    var net = netOf(n);
+    var tag = opts.tag || "div";
+    var attrs = opts.id ? ' data-id="' + esc(opts.id) + '"' : "";
+    if (tag === "button") attrs += ' type="button"';
+    return "<" + tag + ' class="card"' + attrs + ' data-text="' + (d.text === "dark" ? "dark" : "light") + '" data-pattern="' + esc(d.pattern || "none") + '" style="background:' + bgOf(d).replace(/"/g, "&quot;") + '">' +
+      '<span class="pat"></span>' +
+      '<span class="r"><span class="nick">' + esc(c.nick || "Карта") + (last ? "<i>•• " + esc(last) + "</i>" : "") + '</span><span class="bank">' + esc(c.bank || "") + "</span></span>" +
+      '<span class="chip"></span>' +
+      '<span class="num">' + shown + "</span>" +
+      '<span class="r"><span class="holder">' + esc(c.holder || "") + '</span><span class="exp">' + esc(c.exp || "ММ/ГГ") + '</span><span class="net">' + esc(net) + "</span></span>" +
+      "</" + tag + ">";
+  }
+
+  /* ---------- PIN screen ---------- */
+  function setPinMode(m) {
+    mode = m; pin = ""; renderDots(); $("pinErr").textContent = "";
+    if (m === "setup1") { $("pinTitle").textContent = "Придумай PIN-код"; $("pinSub").textContent = "6 цифр. Он шифрует все карты на этом iPhone. Если забудешь, восстановить данные нельзя."; }
+    if (m === "setup2") { $("pinTitle").textContent = "Повтори PIN-код"; $("pinSub").textContent = "Введи те же 6 цифр ещё раз."; }
+    if (m === "unlock") { $("pinTitle").textContent = "TapPay"; $("pinSub").textContent = "Введи PIN-код, чтобы открыть карты."; }
+    show("vPin");
+  }
+  function renderDots() { Array.prototype.forEach.call($("pinDots").children, function (el, i) { el.classList.toggle("f", i < pin.length); }); }
+  function pinError(msg) {
+    $("pinErr").textContent = msg;
+    var d = $("pinDots"); d.classList.remove("shake"); void d.offsetWidth; d.classList.add("shake");
+  }
+  async function onPinFull() {
+    var p = pin;
+    if (mode === "setup1") { tmpPin = p; setPinMode("setup2"); return; }
+    if (mode === "setup2") {
+      if (p !== tmpPin) { tmpPin = ""; setPinMode("setup1"); pinError("PIN-коды не совпали. Попробуй снова."); return; }
+      busy = true; $("pinSub").textContent = "Создаю защищённое хранилище…";
+      try {
+        salt = crypto.getRandomValues(new Uint8Array(16));
+        key = await derive(p, salt);
+        vault = { cards: [] };
+        await persist();
+        lsSet(FAILS, "0"); lsDel(UNTIL);
+        busy = false; enterHome();
+      } catch (e) { busy = false; setPinMode("setup1"); pinError("Браузер не поддерживает шифрование. Открой приложение по https-ссылке."); }
+      return;
+    }
+    if (mode === "unlock") {
+      var until = +lsGet(UNTIL) || 0;
+      if (Date.now() < until) { pin = ""; renderDots(); pinError("Слишком много попыток. Подожди " + Math.ceil((until - Date.now()) / 1000) + " с."); return; }
+      busy = true; $("pinSub").textContent = "Проверяю…";
+      try {
+        var st = JSON.parse(lsGet(KEY));
+        var sl = unb64(st.salt);
+        var k = await derive(p, sl);
+        var pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(st.iv) }, k, unb64(st.data));
+        vault = JSON.parse(dec.decode(pt)); key = k; salt = sl;
+        lsSet(FAILS, "0"); lsDel(UNTIL);
+        busy = false; enterHome();
+      } catch (e) {
+        busy = false;
+        var n = (+lsGet(FAILS) || 0) + 1; lsSet(FAILS, String(n));
+        $("pinSub").textContent = "Введи PIN-код, чтобы открыть карты.";
+        pin = ""; renderDots();
+        if (n >= 5) {
+          var wait = 30 * Math.pow(2, Math.min(n - 5, 6));
+          lsSet(UNTIL, String(Date.now() + wait * 1000));
+          pinError("Неверный PIN. Подожди " + wait + " с.");
+        } else pinError("Неверный PIN. До паузы осталось попыток: " + (5 - n) + ".");
+      }
+    }
+  }
+  function pinKey(k) {
+    if (busy || !$("vPin").classList.contains("on")) return;
+    if (k === "del") pin = pin.slice(0, -1);
+    else if (pin.length < 6) pin += k;
+    $("pinErr").textContent = "";
+    renderDots();
+    if (pin.length === 6) onPinFull();
+  }
+  $("pad").addEventListener("click", function (e) { var b = e.target.closest("button[data-k]"); if (b) pinKey(b.dataset.k); });
+  document.addEventListener("keydown", function (e) {
+    if (!$("vPin").classList.contains("on")) return;
+    if (/^[0-9]$/.test(e.key)) pinKey(e.key); else if (e.key === "Backspace") pinKey("del");
+  });
+
+  /* ---------- lock ---------- */
+  function lock() {
+    vault = null; key = null; salt = null; draft = null; reveal = false; currentId = null; tmpPin = "";
+    $("stack").innerHTML = ""; $("dCard").innerHTML = ""; $("dRows").innerHTML = ""; $("ePrev").innerHTML = "";
+    if (lsGet(KEY)) setPinMode("unlock"); else setPinMode("setup1");
+  }
+  function bumpIdle() {
+    clearTimeout(idleTimer);
+    if (vault) idleTimer = setTimeout(lock, 120000);
+  }
+  ["touchstart", "click", "keydown", "scroll"].forEach(function (ev) { document.addEventListener(ev, bumpIdle, { passive: true, capture: true }); });
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) hiddenAt = Date.now();
+    else if (vault && Date.now() - hiddenAt > 20000) lock();
+  });
+  $("btnLock").addEventListener("click", lock);
+
+  /* ---------- home ---------- */
+  function enterHome() {
+    pin = ""; renderDots(); renderHome(); show("vHome"); bumpIdle();
+  }
+  function renderHome() {
+    var s = $("stack");
+    if (!vault.cards.length) {
+      s.innerHTML = '<div class="empty-state"><p>Здесь появятся твои карты. Добавь первую и оформи её по-своему.</p></div>';
+      return;
+    }
+    s.innerHTML = '<div class="stack">' + vault.cards.map(function (c) { return cardHTML(c, { tag: "button", id: c.id }); }).join("") + "</div>";
+  }
+  $("stack").addEventListener("click", function (e) {
+    var c = e.target.closest(".card"); if (!c) return;
+    openDetail(c.dataset.id);
+  });
+  $("btnAdd").addEventListener("click", function () { openEdit(null); });
+  $("btnErase").addEventListener("click", function () {
+    var b = $("btnErase");
+    if (!eraseArmed) {
+      eraseArmed = true; b.textContent = "Нажми ещё раз, чтобы стереть всё"; b.classList.add("danger");
+      clearTimeout(eraseTimer); eraseTimer = setTimeout(function () { eraseArmed = false; b.textContent = "Стереть все данные"; b.classList.remove("danger"); }, 4000);
+      return;
+    }
+    eraseArmed = false; b.textContent = "Стереть все данные"; b.classList.remove("danger");
+    lsDel(KEY); lsDel(FAILS); lsDel(UNTIL);
+    vault = null; key = null;
+    setPinMode("setup1"); toast("Все данные стёрты");
+  });
+
+  /* ---------- detail ---------- */
+  function openDetail(id) {
+    currentId = id; reveal = false; renderDetail(); show("vDetail");
+  }
+  function renderDetail() {
+    var c = find(currentId); if (!c) { enterHome(); return; }
+    $("dCard").innerHTML = cardHTML(c, { reveal: reveal });
+    var rows = [];
+    if (c.number) rows.push('<div class="row"><span><span class="k">Номер</span><span class="v">' + (reveal ? esc(groups(c.number)) : "•••• •••• •••• " + esc(c.number.slice(-4))) + '</span></span><button class="cp" type="button" data-copy="number">Копировать</button></div>');
+    if (c.exp) rows.push('<div class="row"><span><span class="k">Срок действия</span><span class="v">' + esc(c.exp) + '</span></span><button class="cp" type="button" data-copy="exp">Копировать</button></div>');
+    if (c.holder) rows.push('<div class="row"><span><span class="k">Имя на карте</span><span class="v">' + esc(c.holder.toUpperCase()) + '</span></span><button class="cp" type="button" data-copy="holder">Копировать</button></div>');
+    $("dRows").innerHTML = rows.join("");
+    $("dRows").hidden = !rows.length;
+    $("dReveal").textContent = reveal ? "Скрыть номер" : "Показать номер";
+  }
+  $("dRows").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-copy]"); if (!b) return;
+    var c = find(currentId); if (!c) return;
+    var f = b.dataset.copy;
+    if (f === "number") copy(c.number, "Номер");
+    if (f === "exp") copy(c.exp, "Срок");
+    if (f === "holder") copy(c.holder.toUpperCase(), "Имя");
+  });
+  $("dReveal").addEventListener("click", function () { reveal = !reveal; renderDetail(); });
+  $("dBack").addEventListener("click", function () { reveal = false; renderHome(); show("vHome"); });
+  $("dEdit").addEventListener("click", function () { openEdit(currentId); });
+  var delArmed = false, delTimer = null;
+  $("dDelete").addEventListener("click", async function () {
+    var b = $("dDelete");
+    if (!delArmed) {
+      delArmed = true; b.textContent = "Нажми ещё раз для удаления";
+      clearTimeout(delTimer); delTimer = setTimeout(function () { delArmed = false; b.textContent = "Удалить карту"; }, 4000);
+      return;
+    }
+    delArmed = false; b.textContent = "Удалить карту";
+    vault.cards = vault.cards.filter(function (c) { return c.id !== currentId; });
+    await persist(); renderHome(); show("vHome"); toast("Карта удалена");
+  });
+
+  /* ---------- editor ---------- */
+  function openEdit(id) {
+    isNew = !id;
+    if (id) draft = JSON.parse(JSON.stringify(find(id)));
+    else draft = { id: newId(), nick: "", number: "", exp: "", holder: "", bank: "", design: defaultDesign() };
+    $("eTitle").textContent = isNew ? "Новая карта" : "Изменить";
+    $("fNick").value = draft.nick; $("fNum").value = groups(draft.number); $("fExp").value = draft.exp; $("fBank").value = draft.bank; $("fHolder").value = draft.holder;
+    $("eErr").textContent = "";
+    syncDesignControls(); renderPreview(); show("vEdit");
+  }
+  function renderPreview() { $("ePrev").innerHTML = cardHTML(draft, { reveal: true }); }
+  function syncDesignControls() {
+    var d = draft.design;
+    $("fA").value = d.a; $("fB").value = d.b; $("fAng").value = d.angle;
+    Array.prototype.forEach.call($("fText").children, function (b) { b.setAttribute("aria-pressed", String(b.dataset.v === d.text)); });
+    Array.prototype.forEach.call($("fPat").children, function (b) { b.setAttribute("aria-pressed", String(b.dataset.v === d.pattern)); });
+    $("fPresets").innerHTML = PRESETS.map(function (p, i) {
+      var on = !d.img && p.a.toLowerCase() === d.a.toLowerCase() && p.b.toLowerCase() === d.b.toLowerCase();
+      return '<button type="button" data-i="' + i + '" aria-label="' + esc(p.n) + '" aria-pressed="' + on + '" style="background:linear-gradient(135deg,' + p.a + "," + p.b + ')"></button>';
+    }).join("");
+    $("fImgDel").hidden = !d.img;
+    $("fImgBtn").textContent = d.img ? "Другое фото" : "Выбрать фото";
+  }
+  $("fNick").addEventListener("input", function () { draft.nick = this.value; renderPreview(); });
+  $("fBank").addEventListener("input", function () { draft.bank = this.value; renderPreview(); });
+  $("fHolder").addEventListener("input", function () { draft.holder = this.value; renderPreview(); });
+  $("fNum").addEventListener("input", function () {
+    var n = this.value.replace(/\D/g, "").slice(0, 19);
+    draft.number = n; this.value = groups(n); renderPreview();
+  });
+  $("fExp").addEventListener("input", function () {
+    var v = this.value.replace(/\D/g, "").slice(0, 4);
+    if (v.length >= 3) v = v.slice(0, 2) + "/" + v.slice(2);
+    this.value = v; draft.exp = v; renderPreview();
+  });
+  $("fPresets").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-i]"); if (!b) return;
+    var p = PRESETS[+b.dataset.i];
+    draft.design.a = p.a; draft.design.b = p.b; draft.design.text = p.t; draft.design.img = "";
+    syncDesignControls(); renderPreview();
+  });
+  $("fA").addEventListener("input", function () { draft.design.a = this.value; draft.design.img = draft.design.img; syncDesignControls(); renderPreview(); });
+  $("fB").addEventListener("input", function () { draft.design.b = this.value; syncDesignControls(); renderPreview(); });
+  $("fAng").addEventListener("input", function () { draft.design.angle = +this.value; renderPreview(); });
+  $("fText").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; draft.design.text = b.dataset.v; syncDesignControls(); renderPreview(); });
+  $("fPat").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; draft.design.pattern = b.dataset.v; syncDesignControls(); renderPreview(); });
+  $("fImgBtn").addEventListener("click", function () { $("fImg").click(); });
+  $("fImgDel").addEventListener("click", function () { draft.design.img = ""; syncDesignControls(); renderPreview(); });
+  $("fImg").addEventListener("change", function () {
+    var f = this.files && this.files[0]; this.value = "";
+    if (!f) return;
+    var fr = new FileReader();
+    fr.onload = function () {
+      var im = new Image();
+      im.onload = function () {
+        var W = 720, sc = Math.min(1, W / im.width), w = Math.round(im.width * sc), h = Math.round(im.height * sc);
+        var cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+        cv.getContext("2d").drawImage(im, 0, 0, w, h);
+        draft.design.img = cv.toDataURL("image/jpeg", 0.72);
+        syncDesignControls(); renderPreview();
+      };
+      im.onerror = function () { toast("Не удалось открыть фото"); };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(f);
+  });
+  $("eCancel").addEventListener("click", function () { draft = null; if (isNew) { renderHome(); show("vHome"); } else openDetail(currentId); });
+  $("eSave").addEventListener("click", async function () {
+    var err = "";
+    if (!draft.nick.trim()) err = "Дай карте название.";
+    else if (draft.number && (draft.number.length < 13 || !luhn(draft.number))) err = "Проверь номер: он введён с ошибкой.";
+    else if (draft.exp && !/^(0[1-9]|1[0-2])\/\d\d$/.test(draft.exp)) err = "Срок введи как ММ/ГГ, например 08/28.";
+    $("eErr").textContent = err;
+    if (err) { $("vEdit").scrollTop = 0; return; }
+    draft.nick = draft.nick.trim(); draft.holder = draft.holder.trim(); draft.bank = draft.bank.trim();
+    if (isNew) vault.cards.unshift(draft);
+    else vault.cards = vault.cards.map(function (c) { return c.id === draft.id ? draft : c; });
+    var id = draft.id; draft = null;
+    await persist();
+    if (isNew) { renderHome(); show("vHome"); } else openDetail(id);
+    toast("Сохранено");
+  });
+  $("eForm").addEventListener("submit", function (e) { e.preventDefault(); });
+
+  /* ---------- start ---------- */
+  if (!window.crypto || !crypto.subtle) {
+    document.body.innerHTML = '<div style="padding:32px;font-family:system-ui;color:#E6F1F2">Для шифрования нужна https-ссылка. Открой приложение по адресу, который начинается с https://</div>';
+    return;
+  }
+  if (lsGet(KEY)) setPinMode("unlock"); else setPinMode("setup1");
+  if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+    navigator.serviceWorker.register("sw.js").catch(function () {});
+  }
+})();
+</script>
+</body>
+</html>
